@@ -12,23 +12,37 @@ licence: MIT
 
 import os
 import asyncio
+import threading
+import queue
 from pydantic import BaseModel, Field
 from typing import List, Union, Dict, Generator, Iterator, Any
 from gpt_researcher import GPTResearcher
 import time
 
 
-class CustomLogsHandler:
+class CustomWebSocketHandler:
+    """Custom WebSocket handler to stream chat:message:delta events"""
 
-    def __init__(self):
-        self.logs = []  # Initialize logs to store data
+    def __init__(self, message_queue=None):
+        self.message_queue = message_queue
 
-    async def send_json(self, data: Dict[str, Any]) -> None:
-        """Send JSON data and log it."""
-        self.logs.append(data)  # Append data to logs
-        print(
-            f"My custom Log!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {data}"
-        )  # For demonstration, print the log
+    async def send_json(self, data):
+        """Handle the send_json method called by GPT Researcher"""
+        # Only process data with type and output
+        if isinstance(data, dict) and "type" in data and "output" in data:
+            # Create message event
+            message = {
+                "event": {
+                    "type": "chat:message:delta",
+                    "data": {
+                        "content": data["output"],
+                    },
+                }
+            }
+
+            # If message queue is provided, add message to queue
+            if self.message_queue:
+                self.message_queue.put(message)
 
 
 class Pipeline:
@@ -48,14 +62,10 @@ class Pipeline:
         os.environ["TAVILY_API_KEY"] = self.valves.TAVILY_API_KEY
         os.environ["LANGUAGE"] = self.valves.LANGUAGE
 
-    async def _conduct_research(self, query: str) -> Dict:
+    async def _conduct_research(self, query: str, websocket=None) -> Dict:
         try:
-
-            custom_logs_handler = CustomLogsHandler()
             researcher = GPTResearcher(
-                query=query,
-                report_type="research_report",
-                websocket=custom_logs_handler,
+                query=query, report_type="research_report", websocket=websocket
             )
             await researcher.conduct_research()
             report = await researcher.write_report()
@@ -86,9 +96,9 @@ class Pipeline:
     def pipe(
         self,
         user_message: str,
-        model_id: str,
-        messages: List[dict],
-        body: dict,
+        model_id: str = None,  # 파라미터는 유지하되 사용하지 않음
+        messages: List[dict] = None,  # 파라미터는 유지하되 사용하지 않음
+        body: dict = None,  # 파라미터는 유지하되 사용하지 않음
     ) -> Union[str, Generator, Iterator]:
         # 시작 이벤트 전달
         yield {
@@ -101,21 +111,45 @@ class Pipeline:
             }
         }
 
-        # chat:message:delta
-        yield {
-            "event": {
-                "type": "chat:message:delta",
-                "data": {
-                    "content": "이거슨 델타",
-                },
-            }
-        }
+        # 메시지 큐 생성
+        message_queue = queue.Queue()
 
-        # 연구 수행
-        research_results = asyncio.run(self._conduct_research(user_message))
+        # 연구 수행을 위한 스레드 생성
+        def run_research():
+            nonlocal research_results
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            websocket_handler = CustomWebSocketHandler(message_queue=message_queue)
+            research_results = loop.run_until_complete(
+                self._conduct_research(user_message, websocket=websocket_handler)
+            )
+            # 연구 완료 표시
+            message_queue.put(None)
+
+        # 연구 결과 변수 초기화
+        research_results = None
+
+        # 스레드 시작
+        research_thread = threading.Thread(target=run_research)
+        research_thread.start()
+
+        # 메시지 큐에서 메시지를 가져와 yield
+        while True:
+            try:
+                message = message_queue.get(timeout=0.1)
+                if message is None:
+                    # 연구 완료
+                    break
+                yield message
+            except queue.Empty:
+                # 큐가 비어있으면 계속 대기
+                continue
+
+        # 스레드 종료 대기
+        research_thread.join()
 
         # 결과 전달
-        yield research_results["report"]
+        yield research_results["report"] if research_results else "연구 결과를 가져오지 못했습니다."
 
         # 완료 이벤트 전달
         yield {
