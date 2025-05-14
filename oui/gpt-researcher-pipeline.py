@@ -82,6 +82,16 @@ class Pipeline:
             }
         }
 
+        # chat:message:delta
+        yield {
+            "event": {
+                "type": "chat:message:delta",
+                "data": {
+                    "content": "이거슨 델타",
+                },
+            }
+        }
+
         # 연구 수행
         research_results = asyncio.run(self._conduct_research(user_message))
 
