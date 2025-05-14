@@ -42,8 +42,8 @@ class ResearchRequest(BaseModel):
     report_source: ReportSource
     tone: ReportTone
     headers: Optional[Dict[str, str]] = None
-    repo_name: str = "default"
-    branch_name: str = "main"
+    repo_name: str = "hurxxxx/gpt-researcher"
+    branch_name: str = "master"
     generate_in_background: bool = False
 
 class Pipe:
