@@ -168,8 +168,8 @@ class Pipe:
             "report_source": self.valves.REPORT_SOURCE,
             "tone": self.valves.TONE,
             "headers": None,
-            "repo_name": "default",
-            "branch_name": "main",
+            "repo_name": "hurxxxx/gpt-researcher",
+            "branch_name": "master",
             "generate_in_background": False  # 즉시 결과를 받기 위해 False로 설정
         }
 
