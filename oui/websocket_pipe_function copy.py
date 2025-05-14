@@ -38,6 +38,7 @@ class Pipe:
     def __init__(self):
         self.valves = self.Valves()
         self.id = "gpt_researcher_simple"
+        self.active_ws_task = None  # Track the active WebSocket task
 
     def pipes(self):
         """Define the available pipe options."""
@@ -47,56 +48,75 @@ class Pipe:
 
     async def _handle_websocket_logs(self, ws_url: str, request_data: dict, event_emitter):
         """Handle WebSocket connection to receive real-time logs."""
+        session = None
         try:
             # Connect to WebSocket
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(ws_url) as ws:
-                    # Send start command with research parameters
-                    start_command = {
-                        "task": request_data["task"],
-                        "report_type": request_data["report_type"],
-                        "report_source": request_data["report_source"],
-                        "tone": request_data["tone"],
-                        "source_urls": [],
-                        "agent": "Auto Agent",
-                        "query_domains": []
-                    }
+            session = aiohttp.ClientSession()
+            async with session.ws_connect(ws_url, timeout=30) as ws:
+                print(f"WebSocket connection established to {ws_url}")
 
-                    await ws.send_str(f"start {json.dumps(start_command)}")
+                # Send start command with research parameters
+                start_command = {
+                    "task": request_data["task"],
+                    "report_type": request_data["report_type"],
+                    "report_source": request_data["report_source"],
+                    "tone": request_data["tone"],
+                    "source_urls": [],
+                    "agent": "Auto Agent",
+                    "query_domains": []
+                }
 
-                    # Listen for messages
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            try:
-                                data = json.loads(msg.data)
+                await ws.send_str(f"start {json.dumps(start_command)}")
+                print(f"Sent start command for task: {request_data['task'][:50]}...")
 
-                                # Handle different message types
-                                if data.get("type") == "logs" and "output" in data:
-                                    # Send log as status update
-                                    await event_emitter({
-                                        "type": "status",
-                                        "data": {
-                                            "description": f"연구 진행 중: {data['output']}",
-                                            "done": False,
-                                        }
-                                    })
-                                elif data.get("type") == "report" and "output" in data:
-                                    # Send report progress update
-                                    await event_emitter({
-                                        "type": "status",
-                                        "data": {
-                                            "description": "리포트 작성 중...",
-                                            "done": False,
-                                        }
-                                    })
-                            except json.JSONDecodeError:
-                                print(f"Invalid JSON received: {msg.data}")
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            print(f"WebSocket error: {ws.exception()}")
-                            break
+                # Listen for messages
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+
+                            # Handle different message types
+                            if data.get("type") == "logs" and "output" in data:
+                                # Send log as status update
+                                await event_emitter({
+                                    "type": "status",
+                                    "data": {
+                                        "description": f"연구 진행 중: {data['output']}",
+                                        "done": False,
+                                    }
+                                })
+                            elif data.get("type") == "report" and "output" in data:
+                                # Send report progress update
+                                await event_emitter({
+                                    "type": "status",
+                                    "data": {
+                                        "description": "리포트 작성 중...",
+                                        "done": False,
+                                    }
+                                })
+                            elif data.get("type") == "path" and "output" in data:
+                                # Report is complete when path is received
+                                print(f"Report files ready: {data['output']}")
+                        except json.JSONDecodeError:
+                            print(f"Invalid JSON received: {msg.data}")
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        print(f"WebSocket error: {ws.exception()}")
+                        break
+                    elif msg.type == aiohttp.WSMsgType.CLOSED:
+                        print("WebSocket connection closed by server")
+                        break
         except asyncio.CancelledError:
             # Task was cancelled, which is expected when HTTP response is received
             print("WebSocket task cancelled")
+        except aiohttp.ClientConnectorError as e:
+            print(f"Failed to connect to WebSocket server: {str(e)}")
+            await event_emitter({
+                "type": "status",
+                "data": {
+                    "description": f"WebSocket 서버 연결 실패: {str(e)}",
+                    "done": False,
+                }
+            })
         except Exception as e:
             print(f"Error in WebSocket connection: {str(e)}")
             # Send error as status update
@@ -107,12 +127,27 @@ class Pipe:
                     "done": False,
                 }
             })
+        finally:
+            # Close the session if it was created
+            if session:
+                await session.close()
+                print("WebSocket session closed")
 
     async def pipe(self, body: dict, __event_emitter__=None) -> Any:
         """Process the pipe request and return the research results."""
         # Extract parameters from body
         user_message = body.get("messages", [{}])[-1].get("content", "")
         report_type = body.get("model", self.valves.REPORT_TYPE)
+
+        # Cancel any existing WebSocket task to prevent conflicts
+        if self.active_ws_task and not self.active_ws_task.done():
+            print("Cancelling existing WebSocket task")
+            self.active_ws_task.cancel()
+            try:
+                await self.active_ws_task
+            except asyncio.CancelledError:
+                pass
+            self.active_ws_task = None
 
         # Send status update before starting report generation
         if __event_emitter__:
@@ -146,6 +181,8 @@ class Pipe:
         if __event_emitter__:
             # Create a task to handle WebSocket messages
             ws_task = asyncio.create_task(self._handle_websocket_logs(ws_url, request_data, __event_emitter__))
+            # Store the task reference
+            self.active_ws_task = ws_task
 
         # Send the HTTP request and get the response
         async with aiohttp.ClientSession() as session:
@@ -164,6 +201,14 @@ class Pipe:
                     # Cancel the WebSocket task if it's still running
                     if ws_task and not ws_task.done():
                         ws_task.cancel()
+                        try:
+                            await asyncio.wait_for(ws_task, timeout=2.0)
+                        except (asyncio.TimeoutError, asyncio.CancelledError):
+                            pass
+
+                    # Clear the active task reference
+                    if self.active_ws_task == ws_task:
+                        self.active_ws_task = None
 
                     if response.status != 200:
                         # Send error status update
@@ -241,3 +286,15 @@ class Pipe:
                         }
                     })
                 return f"오류가 발생했습니다: {str(e)}"
+            finally:
+                # Ensure WebSocket task is properly cleaned up
+                if ws_task and not ws_task.done():
+                    ws_task.cancel()
+                    try:
+                        await asyncio.wait_for(ws_task, timeout=2.0)
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        pass
+
+                # Clear the active task reference if it matches
+                if self.active_ws_task == ws_task:
+                    self.active_ws_task = None
