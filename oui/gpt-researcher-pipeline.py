@@ -28,11 +28,22 @@ class CustomWebSocketHandler:
         # Only process data with type and output fields
         if isinstance(data, dict) and "type" in data and "output" in data:
             # Format as chat:message:delta event
+
+            # data["type"] == "logs"
+            # data["type"] == "report"
+            # data["type"] == "images"
+            # data["type"] == "path"
+
+            if data["type"] == "report":
+                content = data["output"]
+            else:
+                content = data["output"] + "\n"
+
             message = {
                 "event": {
                     "type": "chat:message:delta",
                     "data": {
-                        "content": data["output"],
+                        "content": content,
                     },
                 }
             }
@@ -69,8 +80,9 @@ class Pipeline:
 
         try:
             # Initialize researcher with query and websocket for streaming
+            # research_report, deep, multi_agents, detailed_report
             researcher = GPTResearcher(
-                query=query, report_type="detailed_report", websocket=websocket
+                query=query, report_type="research_report", websocket=websocket
             )
 
             # Conduct research and generate report
