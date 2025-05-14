@@ -13,9 +13,22 @@ licence: MIT
 import os
 import asyncio
 from pydantic import BaseModel, Field
-from typing import List, Union, Dict, Generator, Iterator
+from typing import List, Union, Dict, Generator, Iterator, Any
 from gpt_researcher import GPTResearcher
 import time
+
+
+class CustomLogsHandler:
+
+    def __init__(self):
+        self.logs = []  # Initialize logs to store data
+
+    async def send_json(self, data: Dict[str, Any]) -> None:
+        """Send JSON data and log it."""
+        self.logs.append(data)  # Append data to logs
+        print(
+            f"My custom Log!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {data}"
+        )  # For demonstration, print the log
 
 
 class Pipeline:
@@ -37,7 +50,13 @@ class Pipeline:
 
     async def _conduct_research(self, query: str) -> Dict:
         try:
-            researcher = GPTResearcher(query=query, report_type="research_report")
+
+            custom_logs_handler = CustomLogsHandler()
+            researcher = GPTResearcher(
+                query=query,
+                report_type="research_report",
+                websocket=custom_logs_handler,
+            )
             await researcher.conduct_research()
             report = await researcher.write_report()
 
