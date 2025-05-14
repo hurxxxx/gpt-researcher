@@ -1,12 +1,11 @@
 """
-title: Langgraph stream integration with GPT Researcher
-author: bartonzzx
-author_url: https://github.com/bartonzzx
+title: GPT 보고서
+author: hurxxxx
 git_url:
-description: Integrate GPT Researcher with open webui pipeline
-required_open_webui_version: 0.4.3
+description: GPT 보고서
+required_open_webui_version: 0.1.0
 requirements: gpt-researcher
-version: 0.4.3
+version: 0.1.0
 licence: MIT
 """
 
@@ -15,22 +14,20 @@ import asyncio
 import threading
 import queue
 from pydantic import BaseModel, Field
-from typing import List, Union, Dict, Generator, Iterator, Any
+from typing import List, Union, Dict, Generator, Iterator, Optional
 from gpt_researcher import GPTResearcher
-import time
 
 
 class CustomWebSocketHandler:
-    """Custom WebSocket handler to stream chat:message:delta events"""
 
-    def __init__(self, message_queue=None):
+    def __init__(self, message_queue: Optional[queue.Queue] = None):
         self.message_queue = message_queue
 
-    async def send_json(self, data):
-        """Handle the send_json method called by GPT Researcher"""
-        # Only process data with type and output
+    async def send_json(self, data: Dict) -> None:
+
+        # Only process data with type and output fields
         if isinstance(data, dict) and "type" in data and "output" in data:
-            # Create message event
+            # Format as chat:message:delta event
             message = {
                 "event": {
                     "type": "chat:message:delta",
@@ -40,67 +37,62 @@ class CustomWebSocketHandler:
                 }
             }
 
-            # If message queue is provided, add message to queue
+            # Add to queue if available
             if self.message_queue:
                 self.message_queue.put(message)
 
 
 class Pipeline:
+
     class Valves(BaseModel):
+
         OPENAI_API_KEY: str = Field(default="", description="OpenAI API Key")
         TAVILY_API_KEY: str = Field(default="", description="Tavily API Key")
         LANGUAGE: str = Field(default="korean", description="Report Language")
 
     def __init__(self):
+
         self.id = "gpt_researcher"
         self.name = "GPT 보고서"
-        # Initialize valve parameters
+
+        # Initialize valve parameters from environment variables
         self.valves = self.Valves(
             **{k: os.getenv(k, v.default) for k, v in self.Valves.model_fields.items()}
         )
+
+        # Set environment variables for GPT Researcher
         os.environ["OPENAI_API_KEY"] = self.valves.OPENAI_API_KEY
         os.environ["TAVILY_API_KEY"] = self.valves.TAVILY_API_KEY
         os.environ["LANGUAGE"] = self.valves.LANGUAGE
 
     async def _conduct_research(self, query: str, websocket=None) -> Dict:
+
         try:
+            # Initialize researcher with query and websocket for streaming
             researcher = GPTResearcher(
-                query=query, report_type="research_report", websocket=websocket
+                query=query, report_type="detailed_report", websocket=websocket
             )
+
+            # Conduct research and generate report
             await researcher.conduct_research()
             report = await researcher.write_report()
 
-            # Get additional information
-            # research_context = researcher.get_research_context()
-            # research_costs = researcher.get_costs()
-            # research_images = researcher.get_research_images()
-            # research_sources = researcher.get_research_sources()
-
-            return {
-                "report": report,
-                "context": None,
-                "costs": None,
-                "images": None,
-                "sources": None,
-            }
+            # Return research results
+            return {"report": report}
         except Exception as e:
+            # Handle errors gracefully
             print(f"Research Error: {str(e)}")
-            return {
-                "report": f"연구 중 오류가 발생했습니다: {str(e)}",
-                "context": None,
-                "costs": None,
-                "images": None,
-                "sources": None,
-            }
+            return {"report": f"연구 중 오류가 발생했습니다: {str(e)}"}
 
     def pipe(
         self,
         user_message: str,
-        model_id: str = None,  # 파라미터는 유지하되 사용하지 않음
-        messages: List[dict] = None,  # 파라미터는 유지하되 사용하지 않음
-        body: dict = None,  # 파라미터는 유지하되 사용하지 않음
+        model_id: str = None,  # Required by interface but not used
+        messages: List[dict] = None,  # Required by interface but not used
+        body: dict = None,  # Required by interface but not used
     ) -> Union[str, Generator, Iterator]:
-        # 시작 이벤트 전달
+
+        # Send initial status event
         yield {
             "event": {
                 "type": "status",
@@ -111,47 +103,62 @@ class Pipeline:
             }
         }
 
-        # 메시지 큐 생성
+        # Create message queue for real-time communication
         message_queue = queue.Queue()
 
-        # 연구 수행을 위한 스레드 생성
+        # Initialize research results
+        research_results = None
+
+        # Define research thread function
         def run_research():
+            """Run research in a separate thread with its own event loop."""
             nonlocal research_results
+            # Create new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
+            # Create websocket handler that will send messages to our queue
             websocket_handler = CustomWebSocketHandler(message_queue=message_queue)
+
+            # Run the research
             research_results = loop.run_until_complete(
                 self._conduct_research(user_message, websocket=websocket_handler)
             )
-            # 연구 완료 표시
+
+            # Signal that research is complete
             message_queue.put(None)
 
-        # 연구 결과 변수 초기화
-        research_results = None
-
-        # 스레드 시작
+        # Start research in separate thread
         research_thread = threading.Thread(target=run_research)
         research_thread.start()
 
-        # 메시지 큐에서 메시지를 가져와 yield
+        # Stream messages in real-time
         while True:
             try:
+                # Get message from queue with timeout
                 message = message_queue.get(timeout=0.1)
+
+                # Check if research is complete
                 if message is None:
-                    # 연구 완료
                     break
+
+                # Stream message to client
                 yield message
             except queue.Empty:
-                # 큐가 비어있으면 계속 대기
+                # Continue waiting if queue is empty
                 continue
 
-        # 스레드 종료 대기
+        # Wait for research thread to complete
         research_thread.join()
 
-        # 결과 전달
-        yield research_results["report"] if research_results else "연구 결과를 가져오지 못했습니다."
+        # Send final report
+        yield (
+            research_results["report"]
+            if research_results
+            else "연구 결과를 가져오지 못했습니다."
+        )
 
-        # 완료 이벤트 전달
+        # Send completion status event
         yield {
             "event": {
                 "type": "status",
