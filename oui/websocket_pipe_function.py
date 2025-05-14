@@ -1,70 +1,26 @@
 """
-title: GPT Researcher WebSocket Streaming Pipe
+title: GPT Researcher Simple HTTP Pipe
 author: Edward
-description: WebSocket-based streaming pipe function for GPT Researcher
+description: Simple HTTP-based pipe function for GPT Researcher
 required_open_webui_version: 0.1.0
 requirements: aiohttp
-version: 0.1.1
+version: 0.1.0
 licence: MIT
 """
 
 import json
 import aiohttp
+import asyncio
 from pydantic import BaseModel, Field
-from typing import Any, Dict, Callable, Awaitable, Optional
+from typing import Any
 
-class CustomLogsHandler:
-    """A custom Logs handler class to handle WebSocket streaming data."""
-    def __init__(self, event_emitter: Callable[[Any], Awaitable[None]]):
-        self.logs = []  # Initialize logs to store data
-        self.__event_emitter__ = event_emitter
-
-    async def send_json(self, data: Dict[str, Any]) -> None:
-        """Send JSON data and log it."""
-        self.logs.append(data)  # Append data to logs
-
-        # Send status update with log data
-        if isinstance(data, dict):
-            if "type" in data and "output" in data:
-                # For logs and report data
-                if data["type"] == "report":
-                    content = data["output"]
-                else:
-                    content = data["output"] + "\n"
-
-                await self.__event_emitter__({
-                    "type": "chat:message:delta",
-                    "data": {
-                        "content": content,
-                    }
-                })
-
-                # Also send status update with log content
-                await self.__event_emitter__({
-                    "type": "status",
-                    "data": {
-                        "description": content,
-                        "log": content,
-                        "done": False,
-                    }
-                })
-            else:
-                # For other data types
-                await self.__event_emitter__({
-                    "type": "status",
-                    "data": {
-                        "description": str(data),
-                        "log": str(data),
-                        "done": False,
-                    }
-                })
-
+# We'll handle logs directly in the WebSocket handler
 
 class Pipe:
     class Valves(BaseModel):
         SERVER_URL: str = Field(
-            default="ws://localhost:8000/ws",
-            description="WebSocket URL for the GPT Researcher server"
+            default="http://localhost:8000",
+            description="HTTP URL for the GPT Researcher server (without trailing slash)"
         )
         REPORT_TYPE: str = Field(
             default="research_report",
@@ -81,116 +37,207 @@ class Pipe:
 
     def __init__(self):
         self.valves = self.Valves()
-        self.id = "gpt_researcher_websocket"
+        self.id = "gpt_researcher_simple"
 
     def pipes(self):
         """Define the available pipe options."""
         return [
-            {"id": "research_report", "name": "Basic Research Report (2-3 min)"},
-            {"id": "detailed_report", "name": "Detailed Report (5 min)"},
-            {"id": "deep", "name": "Deep Analysis Report (10 min)"}
+            {"id": "research_report", "name": "Basic Research Report (2-3 min)"}
         ]
 
-    async def pipe(self, body: dict, __event_emitter__=None) -> Any:
-        """Process the pipe request and return the research results using WebSocket streaming."""
-        if __event_emitter__ is None:
-            return "Event emitter is required for WebSocket streaming"
+    async def _handle_websocket_logs(self, ws_url: str, request_data: dict, event_emitter):
+        """Handle WebSocket connection to receive real-time logs."""
+        try:
+            # Connect to WebSocket
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(ws_url) as ws:
+                    # Send start command with research parameters
+                    start_command = {
+                        "task": request_data["task"],
+                        "report_type": request_data["report_type"],
+                        "report_source": request_data["report_source"],
+                        "tone": request_data["tone"],
+                        "source_urls": [],
+                        "agent": "Auto Agent",
+                        "query_domains": []
+                    }
 
+                    await ws.send_str(f"start {json.dumps(start_command)}")
+
+                    # Listen for messages
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            try:
+                                data = json.loads(msg.data)
+
+                                # Handle different message types
+                                if data.get("type") == "logs" and "output" in data:
+                                    # Send log as status update
+                                    await event_emitter({
+                                        "type": "status",
+                                        "data": {
+                                            "description": f"연구 진행 중: {data['output']}",
+                                            "done": False,
+                                        }
+                                    })
+                                elif data.get("type") == "report" and "output" in data:
+                                    # Send report progress update
+                                    await event_emitter({
+                                        "type": "status",
+                                        "data": {
+                                            "description": "리포트 작성 중...",
+                                            "done": False,
+                                        }
+                                    })
+                            except json.JSONDecodeError:
+                                print(f"Invalid JSON received: {msg.data}")
+                        elif msg.type == aiohttp.WSMsgType.ERROR:
+                            print(f"WebSocket error: {ws.exception()}")
+                            break
+        except asyncio.CancelledError:
+            # Task was cancelled, which is expected when HTTP response is received
+            print("WebSocket task cancelled")
+        except Exception as e:
+            print(f"Error in WebSocket connection: {str(e)}")
+            # Send error as status update
+            await event_emitter({
+                "type": "status",
+                "data": {
+                    "description": f"WebSocket 연결 오류: {str(e)}",
+                    "done": False,
+                }
+            })
+
+    async def pipe(self, body: dict, __event_emitter__=None) -> Any:
+        """Process the pipe request and return the research results."""
         # Extract parameters from body
         user_message = body.get("messages", [{}])[-1].get("content", "")
         report_type = body.get("model", self.valves.REPORT_TYPE)
 
-        # Initialize the custom logs handler with the event emitter
-        logs_handler = CustomLogsHandler(__event_emitter__)
-
-        # Send initial status update
-        await __event_emitter__({
-            "type": "status",
-            "data": {
-                "description": "연구를 시작합니다...",
-                "log": "연구를 시작합니다...",
-                "done": False,
-            }
-        })
-
-        # Prepare the request data
-        request_data = {
-            "task": user_message,
-            "report_type": report_type,
-            "report_source": self.valves.REPORT_SOURCE,
-            "tone": self.valves.TONE,
-            "agent": "researcher"  # Default agent
-        }
-
-        # Connect to the WebSocket server and stream the research process
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(self.valves.SERVER_URL) as websocket:
-                    # Send the start command with the request data
-                    await websocket.send_str(f"start {json.dumps(request_data)}")
-
-                    # Process WebSocket messages
-                    final_report = ""
-
-                    # Listen for WebSocket messages
-                    async for msg in websocket:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            try:
-                                data = json.loads(msg.data)
-                                print(f"Received WebSocket data: {data}")
-
-                                # Process different types of messages
-                                if data.get("type") == "logs":
-                                    # Forward log messages to the client
-                                    await logs_handler.send_json(data)
-                                elif data.get("type") == "report":
-                                    # Store the report content
-                                    final_report = data.get("output", "")
-                                    await logs_handler.send_json(data)
-                                elif data.get("type") == "path":
-                                    # Research is complete
-                                    await __event_emitter__({
-                                        "type": "status",
-                                        "data": {
-                                            "description": "연구가 완료되었습니다.",
-                                            "log": "연구가 완료되었습니다.",
-                                            "done": True,
-                                        }
-                                    })
-                                else:
-                                    # Forward other message types
-                                    await logs_handler.send_json(data)
-                            except json.JSONDecodeError:
-                                print(f"Received non-JSON message: {msg.data}")
-                                if msg.data == "pong":
-                                    # Heartbeat response, ignore
-                                    continue
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            print(f"WebSocket error: {msg.data}")
-                            await __event_emitter__({
-                                "type": "status",
-                                "data": {
-                                    "description": f"WebSocket 오류: {msg.data}",
-                                    "log": f"WebSocket 오류: {msg.data}",
-                                    "done": True,
-                                }
-                            })
-                            break
-                        elif msg.type == aiohttp.WSMsgType.CLOSED:
-                            print("WebSocket connection closed")
-                            break
-
-                    # Return the final report
-                    return final_report
-        except Exception as e:
-            error_message = f"연결 오류: {str(e)}"
-            print(error_message)
+        # Send status update before starting report generation
+        if __event_emitter__:
             await __event_emitter__({
                 "type": "status",
                 "data": {
-                    "description": error_message,
-                    "log": error_message,
-                    "done": True,
+                    "description": "리포트 생성을 시작합니다...",
+                    "done": False,
                 }
             })
-            return error_message
+
+        # We'll use WebSocket directly for real-time logs
+
+        # ResearchRequest 모델에 맞게 요청 형식 지정
+        request_data = {
+            "task": user_message,  # 서버 모델에서는 'task'가 필수 필드
+            "report_type": report_type,
+            "report_source": self.valves.REPORT_SOURCE,
+            "tone": self.valves.TONE,
+            "headers": None,
+            "repo_name": "default",
+            "branch_name": "main",
+            "generate_in_background": False  # 즉시 결과를 받기 위해 False로 설정
+        }
+
+        # Start a WebSocket connection for real-time logs
+        ws_protocol = "wss" if self.valves.SERVER_URL.startswith("https") else "ws"
+        ws_url = f"{ws_protocol}://{self.valves.SERVER_URL.replace('https://', '').replace('http://', '')}/ws"
+        ws_task = None
+
+        if __event_emitter__:
+            # Create a task to handle WebSocket messages
+            ws_task = asyncio.create_task(self._handle_websocket_logs(ws_url, request_data, __event_emitter__))
+
+        # Send the HTTP request and get the response
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(
+                    f"{self.valves.SERVER_URL}/report/",
+                    json=request_data,
+                    timeout=3600  # 60 minutes timeout
+                ) as response:
+                    # 응답 상태 코드와 상관없이 응답 내용 출력
+                    response_text = await response.text()
+                    print(f"Server response status: {response.status}")
+                    print(f"Server response headers: {response.headers}")
+                    print(f"Server response body: {response_text[:1000]}")
+
+                    # Cancel the WebSocket task if it's still running
+                    if ws_task and not ws_task.done():
+                        ws_task.cancel()
+
+                    if response.status != 200:
+                        # Send error status update
+                        if __event_emitter__:
+                            await __event_emitter__({
+                                "type": "status",
+                                "data": {
+                                    "description": f"서버 오류가 발생했습니다 ({response.status})",
+                                    "done": True,
+                                }
+                            })
+                        return f"서버 오류 ({response.status}): {response_text}"
+
+                    try:
+                        # 응답이 JSON인지 확인
+                        try:
+                            data = json.loads(response_text)
+
+                            # Prepare the result
+                            result = None
+                            if "report" in data:
+                                result = data["report"]
+                            # Check for research_information
+                            elif "research_information" in data:
+                                result = data.get("report", str(data))
+                            # Otherwise return whatever we got
+                            elif "message" in data:
+                                result = data["message"]
+                            else:
+                                result = str(data)
+
+                            # Send status update after report generation is complete
+                            if __event_emitter__:
+                                await __event_emitter__({
+                                    "type": "status",
+                                    "data": {
+                                        "description": "리포트 생성이 완료되었습니다.",
+                                        "done": True,
+                                    }
+                                })
+
+                            return result
+                        except json.JSONDecodeError:
+                            print("Response is not valid JSON")
+                            # Send error status update
+                            if __event_emitter__:
+                                await __event_emitter__({
+                                    "type": "status",
+                                    "data": {
+                                        "description": "응답 형식 오류가 발생했습니다",
+                                        "done": True,
+                                    }
+                                })
+                            return response_text
+                    except Exception as e:
+                        print(f"Error processing response: {str(e)}")
+                        # Send error status update
+                        if __event_emitter__:
+                            await __event_emitter__({
+                                "type": "status",
+                                "data": {
+                                    "description": f"응답 처리 중 오류가 발생했습니다: {str(e)}",
+                                    "done": True,
+                                }
+                            })
+                        return response_text
+            except Exception as e:
+                # Send error status update
+                if __event_emitter__:
+                    await __event_emitter__({
+                        "type": "status",
+                        "data": {
+                            "description": f"요청 중 오류가 발생했습니다: {str(e)}",
+                            "done": True,
+                        }
+                    })
+                return f"오류가 발생했습니다: {str(e)}"
