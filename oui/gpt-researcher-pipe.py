@@ -2,7 +2,7 @@
 title: GPT 보고서
 author: hurxxxx
 git_url:
-description: GPT 보고서
+description: GPT 보고서 - OpenAI GPT와 Tavily를 사용한 자동 리서치 도구
 required_open_webui_version: 0.1.0
 requirements: gpt-researcher
 version: 0.1.0
@@ -54,18 +54,22 @@ class CustomWebSocketHandler:
                 self.message_queue.put(message)
 
 
-class Pipeline:
+class Pipe:
 
     class Valves(BaseModel):
 
-        OPENAI_API_KEY: str = Field(default="", description="OpenAI API Key")
-        TAVILY_API_KEY: str = Field(default="", description="Tavily API Key")
-        LANGUAGE: str = Field(default="korean", description="Report Language")
+        OPENAI_API_KEY: str = Field(default="", description="OpenAI API 키")
+        TAVILY_API_KEY: str = Field(default="", description="Tavily API 키")
+        LANGUAGE: str = Field(default="korean", description="보고서 언어")
+        REPORT_TYPE: str = Field(
+            default="research_report",
+            description="보고서 타입 (research_report, deep, detailed_report)",
+        )
 
     def __init__(self):
 
         self.id = "gpt_researcher"
-        self.name = "GPT 보고서"
+        # self.name = "GPT 보고서"
 
         # Initialize valve parameters from environment variables
         self.valves = self.Valves(
@@ -73,17 +77,27 @@ class Pipeline:
         )
 
         # Set environment variables for GPT Researcher
-        os.environ["OPENAI_API_KEY"] = self.valves.OPENAI_API_KEY
-        os.environ["TAVILY_API_KEY"] = self.valves.TAVILY_API_KEY
-        os.environ["LANGUAGE"] = self.valves.LANGUAGE
+        for key, field in self.Valves.model_fields.items():
+            value = os.getenv(key, field.default)
+            setattr(self.valves, key, value)
+            os.environ[key] = value
 
-    async def _conduct_research(self, query: str, websocket=None) -> Dict:
+    def pipes(self):
+        return [
+            {"id": "research_report", "name": "기본 리서치 보고서 (2~3분)"},
+            {"id": "detailed_report", "name": "상세 보고서 (5분)"},
+            {"id": "deep", "name": "심층 분석 보고서 (10분)"},
+        ]
+
+    async def _conduct_research(
+        self, query: str, report_type: str, websocket=None
+    ) -> Dict:
 
         try:
             # Initialize researcher with query and websocket for streaming
             # research_report, deep, multi_agents, detailed_report
             researcher = GPTResearcher(
-                query=query, report_type="research_report", websocket=websocket
+                query=query, report_type=report_type, websocket=websocket
             )
 
             # Conduct research and generate report
@@ -97,13 +111,11 @@ class Pipeline:
             print(f"Research Error: {str(e)}")
             return {"report": f"연구 중 오류가 발생했습니다: {str(e)}"}
 
-    def pipe(
-        self,
-        user_message: str,
-        model_id: str = None,  # Required by interface but not used
-        messages: List[dict] = None,  # Required by interface but not used
-        body: dict = None,  # Required by interface but not used
-    ) -> Union[str, Generator, Iterator]:
+    async def pipe(self, body: dict) -> Union[str, Generator, Iterator]:
+
+        # Extract parameters from body
+        user_message = body.get("messages", [{}])[-1].get("content", "")
+        model_id = body.get("model", "research_report")
 
         # Send initial status event
         yield {
@@ -135,7 +147,9 @@ class Pipeline:
 
             # Run the research
             research_results = loop.run_until_complete(
-                self._conduct_research(user_message, websocket=websocket_handler)
+                self._conduct_research(
+                    user_message, report_type=model_id, websocket=websocket_handler
+                )
             )
 
             # Signal that research is complete
