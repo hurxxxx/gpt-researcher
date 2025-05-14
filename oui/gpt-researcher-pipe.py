@@ -115,7 +115,7 @@ class Pipe:
 
         # Extract parameters from body
         user_message = body.get("messages", [{}])[-1].get("content", "")
-        model_id = body.get("model", "research_report")
+        report_type = body.get("model", self.valves.REPORT_TYPE)
 
         # Send initial status event
         yield {
@@ -148,7 +148,7 @@ class Pipe:
             # Run the research
             research_results = loop.run_until_complete(
                 self._conduct_research(
-                    user_message, report_type=model_id, websocket=websocket_handler
+                    user_message, report_type=report_type, websocket=websocket_handler
                 )
             )
 
