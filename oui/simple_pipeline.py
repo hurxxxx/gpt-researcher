@@ -1,40 +1,21 @@
-from typing import List, Union, Generator, Iterator, Any
-from schemas import OpenAIChatMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from open_webui.utils.chat import generate_chat_completion
-
-
-class Pipeline:
+class Pipe:
     class Valves(BaseModel):
-        pass
+        MODEL_ID: str = Field(default="")
 
     def __init__(self):
-        self.name = "Pipeline Example"
-        pass
+        self.valves = self.Valves()
 
-    async def pipe(
-        self,
-        user_message: str,
-        model_id: str,
-        messages: List[dict],
-        body: dict,
-        __request__: Any,
-        user: Any,
-    ) -> Union[str, Generator, Iterator]:
-        # This is where you can add your custom pipelines like RAG.
-        print(f"pipe:{__name__}")
+    def pipes(self):
+        return [
+            {"id": "research_report", "name": "기본 리서치 보고서 (2~3분)"},
+            {"id": "detailed_report", "name": "상세 보고서 (5분)"},
+            {"id": "deep", "name": "심층 분석 보고서 (10분)"},
+        ]
 
-        print(messages)
-        print(user_message)
-        print(body)
-
-        response = await generate_chat_completion(
-            request=__request__,
-            form_data=body,
-            user=user,
-        )
-
-        print(response)
-
-        return response
+    def pipe(self, body: dict):
+        # Logic goes here
+        print(self.valves, body)  # Prints the configuration options and the input body
+        model = body.get("model", "")
+        return f"{model}: Hello, World!"
