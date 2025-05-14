@@ -13,8 +13,9 @@ licence: MIT
 import os
 import asyncio
 from pydantic import BaseModel, Field
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Generator, Iterator
 from gpt_researcher import GPTResearcher
+import time
 
 
 class Pipeline:
@@ -64,13 +65,36 @@ class Pipeline:
             }
 
     def pipe(
-        self, user_message: str, model_id: str, messages: List[dict], body: dict
-    ) -> str:
-        # Get the last user message as the research query
-        query = user_message
+        self,
+        user_message: str,
+        model_id: str,
+        messages: List[dict],
+        body: dict,
+    ) -> Union[str, Generator, Iterator]:
+        # 시작 이벤트 전달
+        yield {
+            "event": {
+                "type": "status",
+                "data": {
+                    "description": "연구를 시작합니다...",
+                    "done": False,
+                },
+            }
+        }
 
-        # Run research asynchronously
-        research_results = asyncio.run(self._conduct_research(query))
+        # 연구 수행
+        research_results = asyncio.run(self._conduct_research(user_message))
 
-        # Return only the report
-        return research_results["report"]
+        # 결과 전달
+        yield research_results["report"]
+
+        # 완료 이벤트 전달
+        yield {
+            "event": {
+                "type": "status",
+                "data": {
+                    "description": "연구가 완료되었습니다.",
+                    "done": True,
+                },
+            }
+        }
