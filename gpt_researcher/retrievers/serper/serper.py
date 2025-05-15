@@ -22,7 +22,7 @@ class SerperSearch:
         self.query_domains = query_domains or None
         self.api_key = self.get_api_key()
         # Default values for search settings
-        self.time_range = os.getenv("SERPER_TIME_RANGE", "qdr:w")
+        self.time_range = os.getenv("SERPER_TIME_RANGE", "qdr:m")
         self.region = os.getenv("SERPER_REGION", "kr")
         self.language = os.getenv("SERPER_LANGUAGE", "ko")
         self.location = os.getenv("SERPER_LOCATION", "South Korea")
