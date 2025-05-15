@@ -1,0 +1,19 @@
+[Unit]
+Description=GPT Researcher Service
+After=network.target
+
+[Service]
+Type=forking
+User=edward
+Group=edward
+WorkingDirectory=/home/edward/projects/gpt-researcher
+ExecStart=/bin/bash /home/edward/projects/gpt-researcher/run.sh start
+ExecStop=/bin/bash /home/edward/projects/gpt-researcher/run.sh stop
+Restart=on-failure
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=gpt-researcher
+
+[Install]
+WantedBy=multi-user.target
