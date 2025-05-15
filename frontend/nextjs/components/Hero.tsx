@@ -115,6 +115,7 @@ const Hero: FC<THeroProps> = ({
           transition={{ duration: 0.8, delay: 0.2 }}
           className="landing flex flex-col items-center mb-4 sm:mb-6 md:mb-8"
         >
+     
           <motion.h1 
             className="text-3xl xs:text-4xl sm:text-5xl font-black text-center lg:text-7xl mb-1 sm:mb-2 tracking-tight"
             variants={fadeInUp}
@@ -297,17 +298,17 @@ type suggestionType = {
 const suggestions: suggestionType[] = [
   {
     id: 1,
-    name: "Stock analysis on ",
+    name: "Market analysis of ",
     icon: "/img/stock2.svg",
   },
   {
     id: 2,
-    name: "Help me plan an adventure to ",
+    name: "Research trends in ",
     icon: "/img/hiker.svg",
   },
   {
     id: 3,
-    name: "What are the latest news on ",
+    name: "Latest developments about ",
     icon: "/img/news.svg",
   },
 ];
