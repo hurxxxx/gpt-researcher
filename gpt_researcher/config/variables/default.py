@@ -35,8 +35,8 @@ DEFAULT_CONFIG: BaseConfig = {
     "DEEP_RESEARCH_DEPTH": 2,
     "DEEP_RESEARCH_CONCURRENCY": 4,
     # Search settings
-    "SERPER_TIME_RANGE": "qdr:m",  # Last week
-    "SERPER_REGION": "kr",  # Korea
-    "SERPER_LANGUAGE": "ko",  # Korean
-    "SERPER_LOCATION": "South Korea",  # Default location
+    "SERPER_TIME_RANGE": "qdr:m",  # Last month
+    "SERPER_REGION": "us",  # Korea
+    "SERPER_LANGUAGE": "en",  # Korean
+    "SERPER_LOCATION": "United States",  # Default location
 }

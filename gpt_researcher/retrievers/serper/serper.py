@@ -22,10 +22,10 @@ class SerperSearch:
         self.query_domains = query_domains or None
         self.api_key = self.get_api_key()
         # Default values for search settings
-        self.time_range = os.getenv("SERPER_TIME_RANGE", "qdr:m")
-        self.region = os.getenv("SERPER_REGION", "kr")
-        self.language = os.getenv("SERPER_LANGUAGE", "ko")
-        self.location = os.getenv("SERPER_LOCATION", "South Korea")
+        self.time_range = os.getenv("SERPER_TIME_RANGE", "")
+        self.region = os.getenv("SERPER_REGION", "")
+        self.language = os.getenv("SERPER_LANGUAGE", "")
+        self.location = os.getenv("SERPER_LOCATION", "")
 
     def get_api_key(self):
         """
@@ -64,11 +64,11 @@ class SerperSearch:
                 "tbs": self.time_range,
                 "gl": self.region,
                 "hl": self.language,
-                "location": self.location,
             }
         )
 
-        print("serper data: ", data)
+        print(f"😂 tbs: {self.time_range}, gl: {self.region}, hl: {self.language}")
+        #print("😂 location: ", self.location)
 
         resp = requests.request("POST", url, timeout=10, headers=headers, data=data)
 
