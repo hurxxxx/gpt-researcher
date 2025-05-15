@@ -35,3 +35,7 @@ class BaseConfig(TypedDict):
     DEEP_RESEARCH_CONCURRENCY: int
     DEEP_RESEARCH_DEPTH: int
     DEEP_RESEARCH_BREADTH: int
+    SERPER_TIME_RANGE: str  # qdr:w
+    SERPER_REGION: str  # gl:kr
+    SERPER_LANGUAGE: str  # hl:ko
+    SERPER_LOCATION: str  # location parameter for more specific geographic targeting
