@@ -120,7 +120,7 @@ const Hero: FC<THeroProps> = ({
             variants={fadeInUp}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
-            <div className="mb-2 xs:mb-3 sm:mb-1 md:mb-0">Say Goodbye to</div>
+            <div className="mb-2 xs:mb-3 sm:mb-1 md:mb-0">Real-Time Research Engine</div>
             <span
               style={{
                 backgroundImage: 'linear-gradient(to right, #0cdbb6, #1fd0f0, #06dbee)',
@@ -131,7 +131,7 @@ const Hero: FC<THeroProps> = ({
                 paddingBottom: '0.1em'
               }}
             >
-              Hours of Research
+              Smart Information Search
             </span>
           </motion.h1>
           <motion.h2 
@@ -139,7 +139,7 @@ const Hero: FC<THeroProps> = ({
             variants={fadeInUp}
             transition={{ duration: 0.8, delay: 0.6 }}
           >
-            Say Hello to GPT Researcher, your AI partner for instant insights and comprehensive research
+            Your AI Assistant for Up-to-date Research and Instant Analysis
           </motion.h2>
           
           {/* Powered by badge */}

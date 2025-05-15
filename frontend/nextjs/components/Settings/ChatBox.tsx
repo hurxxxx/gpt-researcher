@@ -30,6 +30,12 @@ export default function ChatBox({ chatBoxSettings, setChatBoxSettings }: ChatBox
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
+    // Set default report_source to 'web'
+    setChatBoxSettings(prev => ({
+      ...prev,
+      report_source: 'web'
+    }));
+
     if (typeof window !== 'undefined') {
       let fullHost = getHost()
       const protocol = fullHost.includes('https') ? 'wss:' : 'ws:'
