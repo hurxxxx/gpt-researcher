@@ -6,10 +6,11 @@ import requests
 import json
 
 
-class SerperSearch():
+class SerperSearch:
     """
     Google Serper Retriever
     """
+
     def __init__(self, query, query_domains=None):
         """
         Initializes the SerperSearch object
@@ -20,6 +21,11 @@ class SerperSearch():
         self.query = query
         self.query_domains = query_domains or None
         self.api_key = self.get_api_key()
+        # Default values for search settings
+        self.time_range = os.getenv("SERPER_TIME_RANGE", "")
+        self.region = os.getenv("SERPER_REGION", "")
+        self.language = os.getenv("SERPER_LANGUAGE", "")
+        self.location = os.getenv("SERPER_LOCATION", "")
 
     def get_api_key(self):
         """
@@ -30,11 +36,13 @@ class SerperSearch():
         try:
             api_key = os.environ["SERPER_API_KEY"]
         except:
-            raise Exception("Serper API key not found. Please set the SERPER_API_KEY environment variable. "
-                            "You can get a key at https://serper.dev/")
+            raise Exception(
+                "Serper API key not found. Please set the SERPER_API_KEY environment variable. "
+                "You can get a key at https://serper.dev/"
+            )
         return api_key
 
-    def search(self, max_results=7):
+    def search(self, max_results=10):
         """
         Searches the query
         Returns:
@@ -46,13 +54,21 @@ class SerperSearch():
         # Search the query (see https://serper.dev/playground for the format)
         url = "https://google.serper.dev/search"
 
-        headers = {
-            'X-API-KEY': self.api_key,
-            'Content-Type': 'application/json'
-        }
+        headers = {"X-API-KEY": self.api_key, "Content-Type": "application/json"}
 
         # TODO: Add support for query domains
-        data = json.dumps({"q": self.query, "num": max_results})
+        data = json.dumps(
+            {
+                "q": self.query,
+                "num": max_results,
+                "tbs": self.time_range,
+                "gl": self.region,
+                "hl": self.language,
+            }
+        )
+
+        print(f"😂 tbs: {self.time_range}, gl: {self.region}, hl: {self.language}")
+        #print("😂 location: ", self.location)
 
         resp = requests.request("POST", url, timeout=10, headers=headers, data=data)
 
