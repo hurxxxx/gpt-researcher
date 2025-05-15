@@ -32,7 +32,6 @@ class Pipe:
         self.valves = self.Valves()
         self.id = "gpt_researcher_simple"
         self.active_ws_task = None  # Track the active WebSocket task
-        self.heartbeat_task = None  # Track the heartbeat task
 
     def pipes(self):
         """Define the available pipe options."""
@@ -41,19 +40,6 @@ class Pipe:
             {"id": "detailed_report", "name": "상세 보고서"},
             {"id": "resource_report", "name": "자료 조사 보고서"},
         ]
-
-    async def _heartbeat(self, ws):
-        """Send heartbeat pings to keep WebSocket connection alive."""
-        try:
-            while True:
-                if ws.closed:
-                    break
-                await ws.send_str("ping")
-                await asyncio.sleep(30)  # Send ping every 30 seconds
-        except asyncio.CancelledError:
-            print("Heartbeat task cancelled")
-        except Exception as e:
-            print(f"Heartbeat error: {str(e)}")
 
     async def _handle_websocket_logs(
         self, ws_url: str, request_data: dict, event_emitter
@@ -65,9 +51,6 @@ class Pipe:
             session = aiohttp.ClientSession()
             async with session.ws_connect(ws_url, timeout=30) as ws:
                 print(f"WebSocket connection established to {ws_url}")
-
-                # Start heartbeat
-                self.heartbeat_task = asyncio.create_task(self._heartbeat(ws))
 
                 # Send start command with research parameters
                 start_command = {
@@ -83,16 +66,9 @@ class Pipe:
                 await ws.send_str(f"start {json.dumps(start_command)}")
                 print(f"Sent start command for task: {request_data['task'][:50]}...")
 
-                # 리포트 내용을 누적할 변수
-                report_content = ""
-
                 # Listen for messages
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
-                        # Handle pong response
-                        if msg.data == "pong":
-                            continue
-
                         try:
                             data = json.loads(msg.data)
 
@@ -109,9 +85,6 @@ class Pipe:
                                     }
                                 )
                             elif data.get("type") == "report" and "output" in data:
-                                # 리포트 내용 누적
-                                report_content += data["output"]
-
                                 # Send report progress update
                                 await event_emitter(
                                     {
@@ -121,34 +94,9 @@ class Pipe:
                                         },
                                     }
                                 )
-                            elif (
-                                data.get("type") == "path" or data.get("type") == "chat"
-                            ):
-                                # Report is complete when path or chat type is received
-                                print(f"Report is complete: {data.get('output', '')}")
-                                await event_emitter(
-                                    {
-                                        "type": "status",
-                                        "data": {
-                                            "description": "리포트 생성이 완료되었습니다.",
-                                            "done": True,
-                                        },
-                                    }
-                                )
-                            elif (
-                                data.get("type") == "human_feedback"
-                                and data.get("content") == "request"
-                            ):
-                                # 사용자 피드백 요청 처리
-                                await event_emitter(
-                                    {
-                                        "type": "status",
-                                        "data": {
-                                            "description": f"사용자 피드백 요청: {data.get('output', '')}",
-                                            "done": False,
-                                        },
-                                    }
-                                )
+                            elif data.get("type") == "path" and "output" in data:
+                                # Report is complete when path is received
+                                print(f"Report files ready: {data['output']}")
                         except json.JSONDecodeError:
                             print(f"Invalid JSON received: {msg.data}")
                     elif msg.type == aiohttp.WSMsgType.ERROR:
@@ -184,15 +132,6 @@ class Pipe:
                 }
             )
         finally:
-            # Cancel heartbeat task if it exists
-            if self.heartbeat_task and not self.heartbeat_task.done():
-                self.heartbeat_task.cancel()
-                try:
-                    await asyncio.wait_for(self.heartbeat_task, timeout=2.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
-                self.heartbeat_task = None
-
             # Close the session if it was created
             if session:
                 await session.close()
@@ -230,15 +169,6 @@ class Pipe:
                 pass
             self.active_ws_task = None
 
-        # Cancel any existing heartbeat task
-        if self.heartbeat_task and not self.heartbeat_task.done():
-            self.heartbeat_task.cancel()
-            try:
-                await asyncio.wait_for(self.heartbeat_task, timeout=2.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
-            self.heartbeat_task = None
-
         # Send status update before starting report generation
         if __event_emitter__:
             await __event_emitter__(
@@ -250,6 +180,8 @@ class Pipe:
                     },
                 }
             )
+
+        # We'll use WebSocket directly for real-time logs
 
         # ResearchRequest 모델에 맞게 요청 형식 지정
         request_data = {
