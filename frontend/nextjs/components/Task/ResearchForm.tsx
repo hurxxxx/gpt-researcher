@@ -101,7 +101,7 @@ export default function ResearchForm({
           <option value="research_report">
             Summary - Short and fast (~2 min)
           </option>
-          <option value="deep">Deep Research Report</option>
+          {/*<option value="deep">Deep Research Report</option>*/}
           <option value="multi_agents">Multi Agents Report</option>
           <option value="detailed_report">
             Detailed - In depth and longer (~5 min)
