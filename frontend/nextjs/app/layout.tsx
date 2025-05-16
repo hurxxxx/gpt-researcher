@@ -46,6 +46,20 @@ export default function RootLayout({
   return (
     <html className="gptr-root" lang="en">
       <head>
+        {/* Matomo Tag Manager */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              var _mtm = window._mtm = window._mtm || [];
+              _mtm.push({'mtm.startTime': (new Date().getTime()), 'event': 'mtm.Start'});
+              (function() {
+                var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+                g.async=true; g.src='https://matomo.giz.ai/js/container_Xmzuy8xC.js'; s.parentNode.insertBefore(g,s);
+              })();
+            `
+          }}
+        />
+        {/* End Matomo Tag Manager */}
         <PlausibleProvider domain="localhost:3000" />
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID!} />
       </head>
