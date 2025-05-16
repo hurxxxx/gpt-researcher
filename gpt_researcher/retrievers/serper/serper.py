@@ -61,14 +61,14 @@ class SerperSearch:
             {
                 "q": self.query,
                 "num": max_results,
-                "tbs": self.time_range,
-                "gl": self.region,
-                "hl": self.language,
+                # "tbs": self.time_range,
+                # "gl": self.region,
+                # "hl": self.language,
             }
         )
 
         print(f"😂 tbs: {self.time_range}, gl: {self.region}, hl: {self.language}")
-        #print("😂 location: ", self.location)
+        # print("😂 location: ", self.location)
 
         resp = requests.request("POST", url, timeout=10, headers=headers, data=data)
 
