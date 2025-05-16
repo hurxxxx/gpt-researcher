@@ -1,14 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    unoptimized: true,
+    domains: ['www.google.com', 'www.google-analytics.com'],
     remotePatterns: [
       {
-        hostname: 'www.google.com',
+        protocol: 'https',
+        hostname: '**',
       },
       {
-        hostname: 'www.google-analytics.com',
+        protocol: 'http',
+        hostname: '**',
       }
     ],
+  },
+  output: 'standalone',
+  distDir: '.next',
+  experimental: {
+    appDir: true,
   },
 };
 
