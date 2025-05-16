@@ -1,0 +1,16 @@
+[Unit]
+Description=GPT Researcher UI (Next.js Frontend)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/projects/gpt-researcher/frontend/nextjs
+Environment="PATH=/root/.nvm/versions/node/v18.19.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/.nvm/versions/node/v18.19.0/bin/npx next start
+Restart=always
+RestartSec=10
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

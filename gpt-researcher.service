@@ -1,0 +1,15 @@
+[Unit]
+Description=GPT Researcher Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/projects/gpt-researcher
+ExecStart=/bin/bash -c "source /root/miniconda3/etc/profile.d/conda.sh && conda activate gpt-researcher && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+Restart=always
+RestartSec=10
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target
