@@ -75,8 +75,9 @@ class ConfigRequest(BaseModel):
 app = FastAPI()
 
 # Static files and templates
-app.mount("/_next", StaticFiles(directory="frontend/nextjs/.next"), name="next_static")
-app.mount("/static", StaticFiles(directory="frontend/nextjs/public"), name="public_static")
+app.mount("/site", StaticFiles(directory="./frontend"), name="site")
+app.mount("/static", StaticFiles(directory="./frontend/static"), name="static")
+templates = Jinja2Templates(directory="./frontend")
 
 # WebSocket manager
 manager = WebSocketManager()
@@ -84,7 +85,7 @@ manager = WebSocketManager()
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 도메인 허용
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,17 +95,21 @@ app.add_middleware(
 DOC_PATH = os.getenv("DOC_PATH", "./my-docs")
 
 # Startup event
+
+
 @app.on_event("startup")
 def startup_event():
     os.makedirs("outputs", exist_ok=True)
     app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+    # os.makedirs(DOC_PATH, exist_ok=True)  # Commented out to avoid creating the folder if not needed
+    
 
 # Routes
 
 
 @app.get("/")
 async def read_root(request: Request):
-    return FileResponse("frontend/nextjs/.next/server/app/index.html")
+    return templates.TemplateResponse("index.html", {"request": request, "report": None})
 
 
 @app.get("/report/{research_id}")
@@ -197,20 +202,3 @@ async def websocket_endpoint(websocket: WebSocket):
         await handle_websocket_communication(websocket, manager)
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
-
-# 루트 경로 처리
-@app.get("/{full_path:path}")
-async def serve_nextjs(full_path: str):
-    # 정적 파일 처리
-    static_file = f"frontend/nextjs/public/{full_path}"
-    if os.path.exists(static_file) and not os.path.isdir(static_file):
-        return FileResponse(static_file)
-        
-    # Next.js의 HTML 파일 경로
-    html_file = f"frontend/nextjs/.next/server/app/{full_path}.html"
-    
-    if os.path.exists(html_file):
-        return FileResponse(html_file)
-    
-    # 파일이 없으면 index.html 반환
-    return FileResponse("frontend/nextjs/.next/server/app/index.html")
