@@ -21,7 +21,7 @@ class SerperSearch:
         self.query = query
         self.query_domains = query_domains or None
         self.api_key = self.get_api_key()
-        # Default values for search settings
+
         self.time_range = os.getenv("SERPER_TIME_RANGE", "")
         self.region = os.getenv("SERPER_REGION", "")
         self.language = os.getenv("SERPER_LANGUAGE", "")
@@ -56,21 +56,37 @@ class SerperSearch:
 
         headers = {"X-API-KEY": self.api_key, "Content-Type": "application/json"}
 
-        # TODO: Add support for query domains
-        data = json.dumps(
-            {
-                "q": self.query,
-                "num": max_results,
-                "tbs": self.time_range,
-                "gl": self.region,
-                "hl": self.language,
-            }
+        data = {
+            "q": self.query,
+            "num": max_results,
+        }
+
+        if self.time_range:
+            data["tbs"] = self.time_range
+
+        if self.region:
+            data["gl"] = self.region
+
+        if self.language:
+            data["hl"] = self.language
+
+        if self.location:
+            data["location"] = self.location
+
+        if self.query_domains:
+            domain_query = " OR ".join(
+                [f"site:{domain}" for domain in self.query_domains]
+            )
+            data["q"] = f"{data['q']} ({domain_query})"
+
+        
+        print("----------------------------")
+        print(json.dumps(data))
+        print("----------------------------")
+
+        resp = requests.request(
+            "POST", url, timeout=10, headers=headers, data=json.dumps(data)
         )
-
-        print(f"😂 tbs: {self.time_range}, gl: {self.region}, hl: {self.language}")
-        #print("😂 location: ", self.location)
-
-        resp = requests.request("POST", url, timeout=10, headers=headers, data=data)
 
         # Preprocess the results
         if resp is None:
