@@ -115,12 +115,13 @@ const Hero: FC<THeroProps> = ({
           transition={{ duration: 0.8, delay: 0.2 }}
           className="landing flex flex-col items-center mb-4 sm:mb-6 md:mb-8"
         >
+     
           <motion.h1 
             className="text-3xl xs:text-4xl sm:text-5xl font-black text-center lg:text-7xl mb-1 sm:mb-2 tracking-tight"
             variants={fadeInUp}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
-            <div className="mb-2 xs:mb-3 sm:mb-1 md:mb-0">Say Goodbye to</div>
+            <div className="mb-2 xs:mb-3 sm:mb-1 md:mb-0">Real-Time Research Engine</div>
             <span
               style={{
                 backgroundImage: 'linear-gradient(to right, #0cdbb6, #1fd0f0, #06dbee)',
@@ -131,7 +132,7 @@ const Hero: FC<THeroProps> = ({
                 paddingBottom: '0.1em'
               }}
             >
-              Hours of Research
+              Smart Information Search
             </span>
           </motion.h1>
           <motion.h2 
@@ -139,7 +140,7 @@ const Hero: FC<THeroProps> = ({
             variants={fadeInUp}
             transition={{ duration: 0.8, delay: 0.6 }}
           >
-            Say Hello to GPT Researcher, your AI partner for instant insights and comprehensive research
+            Your AI Assistant for Up-to-date Research and Instant Analysis
           </motion.h2>
           
           {/* Powered by badge */}
@@ -297,17 +298,17 @@ type suggestionType = {
 const suggestions: suggestionType[] = [
   {
     id: 1,
-    name: "Stock analysis on ",
+    name: "Market analysis of ",
     icon: "/img/stock2.svg",
   },
   {
     id: 2,
-    name: "Help me plan an adventure to ",
+    name: "Research trends in ",
     icon: "/img/hiker.svg",
   },
   {
     id: 3,
-    name: "What are the latest news on ",
+    name: "Latest developments about ",
     icon: "/img/news.svg",
   },
 ];

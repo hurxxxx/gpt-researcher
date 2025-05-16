@@ -20,12 +20,13 @@ const Header = ({ loading, isStopped, showResult, onStop, onNewResearch }: Heade
         <div className="flex flex-col items-center">
           {/* Logo/Home link */}
           <a href="/">
-            <img
-              src="/img/gptr-logo.png"
-              alt="logo"
+            <Image
+              src="/img/infoscope-logo.svg"
+              alt="InfoScope"
               width={60}
               height={60}
               className="lg:h-16 lg:w-16"
+              priority
             />
           </a>
           
