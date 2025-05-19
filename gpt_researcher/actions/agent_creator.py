@@ -62,11 +62,16 @@ async def handle_json_error(response):
     if json_string:
         try:
             json_data = json.loads(json_string)
-            return json_data["server"], json_data["agent_role_prompt"]
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
+            # 'server' 키가 없는 경우에도 기본값 제공
+            if "agent_role_prompt" in json_data:
+                if "server" not in json_data:
+                    print("'server' key missing in JSON. Using default server name.")
+                    return "Default Agent", json_data["agent_role_prompt"]
+                return json_data["server"], json_data["agent_role_prompt"]
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"Error processing JSON: {e}")
 
-    print("No JSON found in the string. Falling back to Default Agent.")
+    print("No valid JSON found in the string. Falling back to Default Agent.")
     return "Default Agent", (
         "You are an AI critical thinker research assistant. Your sole purpose is to write well written, "
         "critically acclaimed, objective and structured reports on given text."
